@@ -6,10 +6,12 @@
  *
  * Version: 1.8.2 / 20.06.2012
  * Author:  Jan-Kaspar Münnich <jan@dotplex.de>
+ * Version: 1.9.2 / 21.12.2012
+ * Author:  Alan Ivey <alan@echoditto.com>
  *
  * Description:
  * Script to import sites, visits and conversions from one Piwik installation into another. Users and user permissions will not be touched.
- * This version works with Piwik version 1.8.2, probably there will be database structure changes in later versions.
+ * This version works with Piwik versions 1.9.0 through 1.9.2, probably there will be database structure changes in later versions.
  * You should run this script in the shell with `php piwik_merge.php` since it could run very long.
  * If the imported data doesn't show in Piwik, make sure that the created date of the site is not after the first (imported) visit.
  *
@@ -62,7 +64,7 @@ $import_sites defines the sites that should be imported from the old installatio
 
 Specify the id from the old installation as the array key. You find the ids in Piwik at "Settings" -> "Websites".
 
-If you set the value to 0, the whole site including urls, goals and pdfs will be copied to the new database. If you set the value to the id of a site existing in the new installation, data will be imported there. Obviously, old and new site should be identical regarding urls and goals.
+If you set the value to 0, the whole site including urls, goals and reports will be copied to the new database. If you set the value to the id of a site existing in the new installation, data will be imported there. Obviously, old and new site should be identical regarding urls and goals.
 
 Example:
 $import_sites = array (
@@ -73,14 +75,14 @@ $import_sites = array (
 $import_sites = array ();
 
 // database fields
-$log_action_fields = array ('name', 'hash', 'type');
-$site_fields = array ('name', 'main_url', 'ts_created', 'ecommerce', 'timezone', 'currency', 'excluded_ips', 'excluded_parameters', '`group`', 'feedburnerName');
+$log_action_fields = array ('name', 'hash', 'type', 'url_prefix');
+$site_fields = array ('name', 'main_url', 'ts_created', 'ecommerce', 'sitesearch', 'sitesearch_keyword_parameters', 'sitesearch_category_parameters', 'timezone', 'currency', 'excluded_ips', 'excluded_parameters', '`group`');
 $site_url_fields = array ('idsite', 'url');
 $goal_fields = array ('idsite', 'idgoal', 'name', 'match_attribute', 'pattern', 'pattern_type', 'case_sensitive', 'allow_multiple', 'revenue', 'deleted');
-$pdf_fields = array ('idreport', 'idsite', 'login', 'description', 'period', 'format', 'display_format', 'email_me', 'additional_emails', 'reports', 'ts_created', 'ts_last_sent', 'deleted');
-$log_visit_fields = array ('idvisitor', 'visitor_localtime', 'visitor_returning', 'visitor_count_visits', 'visitor_days_since_last', 'visitor_days_since_order', 'visitor_days_since_first', 'visit_first_action_time', 'visit_last_action_time', 'visit_exit_idaction_url', 'visit_exit_idaction_name', 'visit_entry_idaction_url', 'visit_entry_idaction_name', 'visit_total_actions', 'visit_total_time', 'visit_goal_converted', 'visit_goal_buyer', 'referer_type', 'referer_name', 'referer_url', 'referer_keyword', 'config_id', 'config_os', 'config_browser_name', 'config_browser_version', 'config_resolution', 'config_pdf', 'config_flash', 'config_java', 'config_director', 'config_quicktime', 'config_realplayer', 'config_windowsmedia', 'config_gears', 'config_silverlight', 'config_cookie', 'location_ip', 'location_browser_lang', 'location_country', 'location_continent', 'custom_var_k1', 'custom_var_v1', 'custom_var_k2', 'custom_var_v2', 'custom_var_k3', 'custom_var_v3', 'custom_var_k4', 'custom_var_v4', 'custom_var_k5', 'custom_var_v5', 'location_provider');
+$report_fields = array ('idreport', 'idsite', 'login', 'description', 'period', 'type', 'format', 'reports', 'parameters', 'ts_created', 'ts_last_sent', 'deleted');
+$log_visit_fields = array ('idvisitor', 'visitor_localtime', 'visitor_returning', 'visitor_count_visits', 'visitor_days_since_last', 'visitor_days_since_order', 'visitor_days_since_first', 'visit_first_action_time', 'visit_last_action_time', 'visit_exit_idaction_url', 'visit_exit_idaction_name', 'visit_entry_idaction_url', 'visit_entry_idaction_name', 'visit_total_actions', 'visit_total_time', 'visit_goal_converted', 'visit_goal_buyer', 'referer_type', 'referer_name', 'referer_url', 'referer_keyword', 'config_id', 'config_os', 'config_browser_name', 'config_browser_version', 'config_resolution', 'config_pdf', 'config_flash', 'config_java', 'config_director', 'config_quicktime', 'config_realplayer', 'config_windowsmedia', 'config_gears', 'config_silverlight', 'config_cookie', 'location_ip', 'location_browser_lang', 'location_country', 'location_region', 'location_city', 'location_latitude', 'location_longitude', 'custom_var_k1', 'custom_var_v1', 'custom_var_k2', 'custom_var_v2', 'custom_var_k3', 'custom_var_v3', 'custom_var_k4', 'custom_var_v4', 'custom_var_k5', 'custom_var_v5', 'location_provider', 'visit_total_searches');
 $log_link_visit_action_fields = array ('idsite', 'idvisitor', 'server_time', 'idvisit', 'idaction_url', 'idaction_url_ref', 'idaction_name', 'idaction_name_ref', 'time_spent_ref_action', 'custom_var_k1', 'custom_var_v1', 'custom_var_k2', 'custom_var_v2', 'custom_var_k3', 'custom_var_v3', 'custom_var_k4', 'custom_var_v4', 'custom_var_k5', 'custom_var_v5');
-$log_conversion_fields = array ('idvisit', 'idsite', 'idvisitor', 'server_time', 'idaction_url', 'idlink_va', 'referer_visit_server_date', 'referer_type', 'referer_name', 'referer_keyword', 'visitor_returning', 'visitor_count_visits', 'visitor_days_since_first', 'visitor_days_since_order', 'location_country', 'location_continent', 'url', 'idgoal', 'buster', 'idorder', 'items', 'revenue', 'revenue_subtotal', 'revenue_tax', 'revenue_shipping', 'revenue_discount', 'custom_var_k1', 'custom_var_v1', 'custom_var_k2', 'custom_var_v2', 'custom_var_k3', 'custom_var_v3', 'custom_var_k4', 'custom_var_v4', 'custom_var_k5', 'custom_var_v5');
+$log_conversion_fields = array ('idvisit', 'idsite', 'idvisitor', 'server_time', 'idaction_url', 'idlink_va', 'referer_visit_server_date', 'referer_type', 'referer_name', 'referer_keyword', 'visitor_returning', 'visitor_count_visits', 'visitor_days_since_first', 'visitor_days_since_order', 'location_country', 'location_region', 'location_city', 'location_latitude', 'location_longitude', 'url', 'idgoal', 'buster', 'idorder', 'items', 'revenue', 'revenue_subtotal', 'revenue_tax', 'revenue_shipping', 'revenue_discount', 'custom_var_k1', 'custom_var_v1', 'custom_var_k2', 'custom_var_v2', 'custom_var_k3', 'custom_var_v3', 'custom_var_k4', 'custom_var_v4', 'custom_var_k5', 'custom_var_v5');
 $log_conversion_item_fields = array ('idsite', 'idvisitor', 'server_time', 'idvisit', 'idorder', 'idaction_sku', 'idaction_name', 'idaction_category', 'idaction_category2', 'idaction_category3', 'idaction_category4', 'idaction_category5', 'price', 'quantity', 'deleted');
 
 function escape_array ($array) {
@@ -203,14 +205,14 @@ foreach ($import_sites as $site_id_old => $site_id_new) {
 				else {
 					die ("Error: " . mysql_error ($db1) . "\nQuery: " . $query . "\n");
 				}
-				// import pdf reports for site
-				$query = "SELECT " . implode (', ', $pdf_fields) . " FROM " . $db_old['prefix'] . "pdf WHERE idsite=" . $site_id_old;
+				// import reports for site
+				$query = "SELECT " . implode (', ', $report_fields) . " FROM " . $db_old['prefix'] . "report WHERE idsite=" . $site_id_old;
 				$res = mysql_query ($query, $db1);
 				if ($res) {
 					if (mysql_num_rows ($res)) {
-						while ($pdf = mysql_fetch_assoc ($res)) {
-							$pdf['idsite'] = $site_id_new;
-							$query = "INSERT INTO " . $db_new['prefix'] . "pdf (" . implode (', ', $pdf_fields) . ") VALUES ('" . implode ("', '", escape_array ($pdf)) . "')";
+						while ($report = mysql_fetch_assoc ($res)) {
+							$report['idsite'] = $site_id_new;
+							$query = "INSERT INTO " . $db_new['prefix'] . "report (" . implode (', ', $report_fields) . ") VALUES ('" . implode ("', '", escape_array ($report)) . "')";
 							if (!mysql_query ($query, $db2)) {
 								die ("Error: " . mysql_error ($db2) . "\nQuery: " . $query . "\n");
 							}
