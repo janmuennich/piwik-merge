@@ -8,10 +8,14 @@
  * Author:  Alan Ivey <alan@echoditto.com>
  * Version: 1.11.1 / 14.03.2013
  * Author:  Christian Hanne <hanne@laborb.de>
+ * Version: 2.0.0 / 18.05.2014
+ * Author:  Christian Hanne <hanne@laborb.de>
+ * Version: 2.3.0 / 18.06.2014
+ * Author:  Manuel Frei <manu@defect.ch>
  *
  * Description:
  * Script to import sites, visits and conversions from one Piwik installation into another. Users and user permissions will not be touched.
- * This version works with Piwik versions 1.11.0 through 1.11.1, probably there will be database structure changes in later versions.
+ * This version works with Piwik versions 2.3.0, probably there will be database structure changes in later versions.
  * You should run this script in the shell with `php piwik_merge.php` since it could run very long.
  * If the imported data doesn't show in Piwik, make sure that the created date of the site is not after the first (imported) visit.
  *
@@ -27,6 +31,11 @@
  * - exchanged some die-calls with echoes, to make sure we can import tables with buggy entries
  * - did some syntax changes to improve readability
  * - added missing database fields
+ *
+ * Changes in version 2.3.0:
+ * - add function to escape null values
+ * - add missing fields of new piwik version
+ *
  *
  * VERY IMPORTANT notice: You should really backup your database before running the script!
  *
@@ -47,6 +56,7 @@
 /**
  * Enter the database credentials in $db_old and $db_new.
  */
+
 $db_old = array(
   'server' => 'localhost',
   'user' => '',
@@ -76,6 +86,7 @@ $db_new = array(
  * 2 => 0  // Site with id 2 in the old installation will be imported a new site in the new installation
  * );
  */
+
 $import_sites = array();
 
 /**
@@ -93,6 +104,7 @@ $log_action_fields = array(
 );
 
 $site_fields = array(
+  'idsite',
   'name',
   'main_url',
   'ts_created',
@@ -106,6 +118,7 @@ $site_fields = array(
   'excluded_parameters',
   'excluded_user_agents',
   '`group`',
+  'type',
   'keep_url_fragment',
 );
 
@@ -132,6 +145,7 @@ $report_fields = array(
   'idsite',
   'login',
   'description',
+  'iidsegment',
   'hour',
   'period',
   'type',
@@ -158,6 +172,8 @@ $log_visit_fields = array(
   'visit_entry_idaction_url',
   'visit_entry_idaction_name',
   'visit_total_actions',
+  'visit_total_searches',
+  'visit_total_events',
   'visit_total_time',
   'visit_goal_converted',
   'visit_goal_buyer',
@@ -187,6 +203,7 @@ $log_visit_fields = array(
   'location_city',
   'location_latitude',
   'location_longitude',
+  'location_provider',
   'custom_var_k1',
   'custom_var_v1',
   'custom_var_k2',
@@ -197,8 +214,6 @@ $log_visit_fields = array(
   'custom_var_v4',
   'custom_var_k5',
   'custom_var_v5',
-  'location_provider',
-  'visit_total_searches',
 );
 
 $log_link_visit_action_fields = array(
@@ -210,7 +225,10 @@ $log_link_visit_action_fields = array(
   'idaction_url_ref',
   'idaction_name',
   'idaction_name_ref',
+  'idaction_event_category',
+  'idaction_event_action',
   'time_spent_ref_action',
+  'custom_float',
   'custom_var_k1',
   'custom_var_v1',
   'custom_var_k2',
@@ -290,6 +308,23 @@ function escape_array($array) {
   return $array;
 }
 
+function array_to_sql_values($array) {
+  $str = '';
+  foreach ($array as $value) {
+    // decide if empty string, NULL, or real value (=== to check type an value)
+    if($value === '') {
+        $str .= "'',";
+    } elseif($value === null) {
+        $str .= "NULL,";
+    } else {
+        $str .= "'" . mysql_real_escape_string($value) . "',";
+    }
+  }
+ 
+  // remove last , 
+  return rtrim($str, ",");
+}
+
 // connect databases
 $db1 = mysql_connect($db_old['server'], $db_old['user'], $db_old['pass']);
 if (!$db1) {
@@ -328,7 +363,8 @@ if ($res) {
         $action_id_new = $action_new['idaction'];
       }
       else {
-        $query = "INSERT INTO " . $db_new['prefix'] . "log_action (" . implode(', ', $log_action_fields) . ") VALUES ('" . implode("', '", escape_array($action)) . "')";
+        $query = "INSERT INTO " . $db_new['prefix'] . "log_action (" . implode(', ', $log_action_fields) . ") VALUES (" . array_to_sql_values($action) . ")";
+
         $res2 = mysql_query($query, $db2);
         if ($res2) {
           $action_id_new = mysql_insert_id($db2);
@@ -362,7 +398,9 @@ foreach ($import_sites as $site_id_old => $site_id_new) {
       // import site if no new id specified
       if (!$site_id_new) {
         echo "Importing site " . $site_id_old . "...\n";
-        $query = "INSERT INTO " . $db_new['prefix'] . "site (" . implode(', ', $site_fields) . ") VALUES ('" . implode("', '", escape_array($site)) . "')";
+
+        $query = "INSERT INTO " . $db_new['prefix'] . "site (" . implode(', ', $site_fields) . ") VALUES (" . array_to_sql_values($site) . ")";
+
         $res = mysql_query($query, $db2);
         if ($res) {
           $site_id_new = mysql_insert_id($db2);
@@ -378,7 +416,9 @@ foreach ($import_sites as $site_id_old => $site_id_new) {
           if (mysql_num_rows($res)) {
             while ($site_url = mysql_fetch_assoc($res)) {
               $site_url['idsite'] = $site_id_new;
-              $query = "INSERT INTO " . $db_new['prefix'] . "site_url (" . implode(', ', $site_url_fields) . ") VALUES ('" . implode("', '", escape_array($site_url)) . "')";
+
+              $query = "INSERT INTO " . $db_new['prefix'] . "site_url (" . implode(', ', $site_url_fields) . ") VALUES (" . array_to_sql_values($site_url) . ")";
+
               if (!mysql_query($query, $db2)) {
                 die("Error: " . mysql_error($db2) . "\nQuery: " . $query . "\n");
               }
@@ -396,7 +436,9 @@ foreach ($import_sites as $site_id_old => $site_id_new) {
           if (mysql_num_rows($res)) {
             while ($goal = mysql_fetch_assoc($res)) {
               $goal['idsite'] = $site_id_new;
-              $query = "INSERT INTO " . $db_new['prefix'] . "goal (" . implode(', ', $goal_fields) . ") VALUES ('" . implode("', '", escape_array($goal)) . "')";
+
+              $query = "INSERT INTO " . $db_new['prefix'] . "goal (" . implode(', ', $goal_fields) . ") VALUES (" . array_to_sql_values($goal) . ")";
+
               if (!mysql_query($query, $db2)) {
                 die("Error: " . mysql_error($db2) . "\nQuery: " . $query . "\n");
               }
@@ -414,7 +456,9 @@ foreach ($import_sites as $site_id_old => $site_id_new) {
           if (mysql_num_rows($res)) {
             while ($report = mysql_fetch_assoc($res)) {
               $report['idsite'] = $site_id_new;
-              $query = "INSERT INTO " . $db_new['prefix'] . "report (" . implode(', ', $report_fields) . ") VALUES ('" . implode("', '", escape_array($report)) . "')";
+
+              $query = "INSERT INTO " . $db_new['prefix'] . "report (" . implode(', ', $report_fields) . ") VALUES (" . array_to_sql_values($action) . ")";
+
               if (!mysql_query($query, $db2)) {
                 die("Error: " . mysql_error($db2) . "\nQuery: " . $query . "\n");
               }
@@ -466,8 +510,8 @@ foreach ($import_sites as $site_id_old => $site_id_new) {
           $visit['visit_entry_idaction_url'] = isset($action_mapping[$visit['visit_entry_idaction_url']]) ? $action_mapping[$visit['visit_entry_idaction_url']] : 0;
           $visit['visit_entry_idaction_name'] = isset($action_mapping[$visit['visit_entry_idaction_name']]) ? $action_mapping[$visit['visit_entry_idaction_name']] : 0;
 
-          // insert visit
-          $query = "INSERT INTO " . $db_new['prefix'] . "log_visit (idsite, " . implode(', ', $log_visit_fields) . ") VALUES (" . $site_id_new . ", '" . implode("', '", escape_array($visit)) . "')";
+          $query = "INSERT INTO " . $db_new['prefix'] . "log_visit (idsite, " . implode(', ', $log_visit_fields) . ") VALUES (" . $site_id_new . ", " . array_to_sql_values($visit) . ")";
+
           $res2 = mysql_query($query, $db2);
           if ($res2) {
             $visit_id_new = mysql_insert_id($db2);
@@ -488,7 +532,8 @@ foreach ($import_sites as $site_id_old => $site_id_new) {
                   $visit_action['idaction_url_ref'] = isset($action_mapping[$visit_action['idaction_url_ref']]) ? $action_mapping[$visit_action['idaction_url_ref']] : 0;
                   $visit_action['idaction_name'] = isset($action_mapping[$visit_action['idaction_name']]) ? $action_mapping[$visit_action['idaction_name']] : 0;
                   $visit_action['idaction_name_ref'] = isset($action_mapping[$visit_action['idaction_name_ref']]) ? $action_mapping[$visit_action['idaction_name_ref']] : 0;
-                  $query = "INSERT INTO " . $db_new['prefix'] . "log_link_visit_action (" . implode(', ', $log_link_visit_action_fields) . ") VALUES ('" . implode("', '", escape_array($visit_action)) . "')";
+
+                  $query = "INSERT INTO " . $db_new['prefix'] . "log_link_visit_action (" . implode(', ', $log_link_visit_action_fields) . ") VALUES (" . array_to_sql_values($visit_action) . ")";
                   $res3 = mysql_query($query, $db2);
                   if ($res3) {
                     $visit_action_mapping[$visit_action_id_old] = mysql_insert_id($db2);
@@ -513,7 +558,9 @@ foreach ($import_sites as $site_id_old => $site_id_new) {
                   $conversion['idsite'] = $site_id_new;
                   $conversion['idaction_url'] = isset($action_mapping[$conversion['idaction_url']]) ? $action_mapping[$conversion['idaction_url']] : 0;
                   $conversion['idlink_va'] = isset($visit_action_mapping[$conversion['idlink_va']]) ? $visit_action_mapping[$conversion['idlink_va']] : 0;
-                  $query = "INSERT INTO " . $db_new['prefix'] . "log_conversion (" . implode(', ', $log_conversion_fields) . ") VALUES ('" . implode("', '", escape_array($conversion)) . "')";
+
+                  $query = "INSERT INTO " . $db_new['prefix'] . "log_conversion (" . implode(', ', $log_conversion_fields) . ") VALUES (" . array_to_sql_values($conversion) . ")";
+
                   $query = str_replace("''", "NULL", $query);
                   if (!mysql_query($query, $db2)) {
                     echo("Error: " . mysql_error($db2) . "\nQuery: " . $query . "\n");
@@ -540,7 +587,8 @@ foreach ($import_sites as $site_id_old => $site_id_new) {
                   $conversion_item['idaction_category3'] = isset($action_mapping[$conversion_item['idaction_category3']]) ? $action_mapping[$conversion_item['idaction_category3']] : 0;
                   $conversion_item['idaction_category4'] = isset($action_mapping[$conversion_item['idaction_category4']]) ? $action_mapping[$conversion_item['idaction_category4']] : 0;
                   $conversion_item['idaction_category5'] = isset($action_mapping[$conversion_item['idaction_category5']]) ? $action_mapping[$conversion_item['idaction_category5']] : 0;
-                  $query = "INSERT INTO " . $db_new['prefix'] . "log_conversion_item (" . implode(', ', $log_conversion_item_fields) . ") VALUES ('" . implode("', '", escape_array($conversion_item)) . "')";
+
+                  $query = "INSERT INTO " . $db_new['prefix'] . "log_conversion_item (" . implode(', ', $log_conversion_item_fields) . ") VALUES (" . array_to_sql_values($conversion_item) . ")";
                   if (!mysql_query($query, $db2)) {
                     echo("Error: " . mysql_error($db2) . "\nQuery: " . $query . "\n");
                   }
