@@ -59,17 +59,17 @@
 
 $db_old = array(
   'server' => 'localhost',
-  'user' => '',
-  'pass' => '',
-  'db' => '',
+  'user' => 'root',
+  'pass' => 'password',
+  'db' => 'piwik',
   'prefix' => 'piwik_',
 );
 
 $db_new = array(
   'server' => 'localhost',
-  'user' => '',
-  'pass' => '',
-  'db' => '',
+  'user' => 'root',
+  'pass' => 'password',
+  'db' => 'piwik',
   'prefix' => 'piwik_',
 );
 
@@ -145,9 +145,9 @@ $report_fields = array(
   'idsite',
   'login',
   'description',
-  'iidsegment',
-  'hour',
+  'idsegment',
   'period',
+  'hour',
   'type',
   'format',
   'reports',
@@ -183,8 +183,12 @@ $log_visit_fields = array(
   'referer_keyword',
   'config_id',
   'config_os',
+  'config_os_version',
   'config_browser_name',
   'config_browser_version',
+  'config_device_type',
+  'config_device_brand',
+  'config_device_model',
   'config_resolution',
   'config_pdf',
   'config_flash',
@@ -228,7 +232,6 @@ $log_link_visit_action_fields = array(
   'idaction_event_category',
   'idaction_event_action',
   'time_spent_ref_action',
-  'custom_float',
   'custom_var_k1',
   'custom_var_v1',
   'custom_var_k2',
@@ -239,6 +242,7 @@ $log_link_visit_action_fields = array(
   'custom_var_v4',
   'custom_var_k5',
   'custom_var_v5',
+  'custom_float',
 );
 
 $log_conversion_fields = array(
@@ -320,8 +324,8 @@ function array_to_sql_values($array) {
         $str .= "'" . mysql_real_escape_string($value) . "',";
     }
   }
- 
-  // remove last , 
+
+  // remove last ,
   return rtrim($str, ",");
 }
 
@@ -399,7 +403,8 @@ foreach ($import_sites as $site_id_old => $site_id_new) {
       if (!$site_id_new) {
         echo "Importing site " . $site_id_old . "...\n";
 
-        $query = "INSERT INTO " . $db_new['prefix'] . "site (" . implode(', ', $site_fields) . ") VALUES (" . array_to_sql_values($site) . ")";
+        // Insert while removing the first pk field which will be auto-assigned
+        $query = "INSERT INTO " . $db_new['prefix'] . "site (" . implode(', ', array_slice($site_fields,1)) . ") VALUES (" . array_to_sql_values(array_slice($site,1)) . ")";
 
         $res = mysql_query($query, $db2);
         if ($res) {
